@@ -21,39 +21,41 @@ func Compare(dump1Path string, dump2Path string) {
 	dump1 := getDump(dump1Path)
 	dump2 := getDump(dump2Path)
 
-dump1Loop:
+	var dump1FilesMap map[string]dto.File = make(map[string]dto.File)
+	var dump2FilesMap map[string]dto.File = make(map[string]dto.File)
+
 	for _, dump1File := range dump1.Files {
-		for _, dump2File := range dump2.Files {
-			if dump1File.Name == dump2File.Name {
-				if dump1File.Hash != dump2File.Hash {
-					differentFiles = append(differentFiles, dump1File.Name)
-				}
-				continue dump1Loop // found dump1 in dump2
-			}
-		}
-		// didn't find dump1 in dump2
-		onlyInDump1 = append(onlyInDump1, dump1File)
+		dump1FilesMap[dump1File.GetCleanUnixName()] = dump1File
+	}
+	for _, dump2File := range dump2.Files {
+		dump2FilesMap[dump2File.GetCleanUnixName()] = dump2File
 	}
 
-dump2Loop:
-	for _, dump2File := range dump2.Files {
-		for _, dump1File := range dump1.Files {
-			if dump2File.Name == dump1File.Name {
-				continue dump2Loop // found dump2 in dump1
+	for dump1FileName, dump1File := range dump1FilesMap {
+		if dump2File, existsInDump2 := dump2FilesMap[dump1FileName]; existsInDump2 {
+			if dump1File.Hash != dump2File.Hash {
+				differentFiles = append(differentFiles, dump1File.GetCleanUnixName())
 			}
+			delete(dump2FilesMap, dump1FileName)
+		} else {
+			onlyInDump1 = append(onlyInDump1, dump1File)
 		}
-		// didn't find dump1 in dump2
-		onlyInDump2 = append(onlyInDump1, dump2File)
+	}
+
+	for dump2FileName, dump2File := range dump2FilesMap {
+		if _, existsInDump1 := dump1FilesMap[dump2FileName]; !existsInDump1 {
+			onlyInDump2 = append(onlyInDump2, dump2File)
+		}
 	}
 
 	log.Printf("=== only in %s: ===", dump1Path)
 	for _, d1File := range onlyInDump1 {
-		log.Println(d1File.Name)
+		log.Println(d1File.GetCleanUnixName())
 	}
 
 	log.Printf("=== only in %s: ===", dump2Path)
 	for _, d2File := range onlyInDump2 {
-		log.Println(d2File.Name)
+		log.Println(d2File.GetCleanUnixName())
 	}
 
 	log.Printf("=== different files: ===")
