@@ -18,14 +18,14 @@ type FilesMeta struct {
 	count uint64
 }
 
-func DumpRun(searchIn string, saveDumpTo string, removePrefix string) {
+func DumpRun(searchIn string, saveDumpTo string, removePrefix string, skipWithErrors bool) {
 	if searchIn == "" || saveDumpTo == "" {
 		log.Println("searchIn or saveDumpTo is empty")
 		return
 	}
 	log.Printf("dumping %s", searchIn)
 
-	filesMeta := getFilesMeta(searchIn)
+	filesMeta := getFilesMeta(searchIn, skipWithErrors)
 	filesCounter := 0
 	var filesSizeCounter uint64 = 0
 
@@ -34,16 +34,29 @@ func DumpRun(searchIn string, saveDumpTo string, removePrefix string) {
 	err := filepath.Walk(searchIn,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
-				return err
+				if skipWithErrors {
+					log.Printf("skipping %s: %v", path, err)
+					return nil
+				}
+				return fmt.Errorf("couldn't open folder: %v", err)
 			}
 			if info.IsDir() {
 				return nil
 			}
 			pathWithoutPrefix := strings.TrimPrefix(path, removePrefix)
 
+			md5, err := getMd5(path)
+			if err != nil {
+				if skipWithErrors {
+					log.Printf("skipping %s: %v", path, err)
+					return nil
+				} else {
+					return fmt.Errorf("couldn't calculate md5 for %s: %v", path, err)
+				}
+			}
 			d.Files = append(d.Files, dto.File{
 				Name: pathWithoutPrefix,
-				Hash: getMd5(path),
+				Hash: md5,
 				Size: info.Size(),
 			})
 			filesCounter++
@@ -62,7 +75,7 @@ func DumpRun(searchIn string, saveDumpTo string, removePrefix string) {
 		})
 
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalf("error traversing %s: %v", searchIn, err)
 	}
 
 	if dumpJson, dumpJsonErr := json.Marshal(d); dumpJsonErr != nil {
@@ -74,7 +87,7 @@ func DumpRun(searchIn string, saveDumpTo string, removePrefix string) {
 	log.Printf("saved dump to %s", saveDumpTo)
 }
 
-func getFilesMeta(searchIn string) FilesMeta {
+func getFilesMeta(searchIn string, skipWithErrors bool) FilesMeta {
 	log.Println("calculating files meta...")
 
 	meta := FilesMeta{}
@@ -82,6 +95,10 @@ func getFilesMeta(searchIn string) FilesMeta {
 	err := filepath.Walk(searchIn,
 		func(path string, info os.FileInfo, err error) error {
 			if err != nil {
+				if skipWithErrors {
+					log.Printf("calculating meta: skipping %s: %v", path, err)
+					return nil
+				}
 				return err
 			}
 			if info.IsDir() {
@@ -100,19 +117,19 @@ func getFilesMeta(searchIn string) FilesMeta {
 	return meta
 }
 
-func getMd5(file string) string {
+func getMd5(file string) (string, error) {
 	f, err := os.Open(file)
 	if err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("couldn't open file %s: %v", file, err)
 	}
 	defer f.Close()
 
 	h := md5.New()
 	if _, err := io.Copy(h, f); err != nil {
-		log.Fatal(err)
+		return "", fmt.Errorf("couldn't read file %s: %v", file, err)
 	}
 
-	return fmt.Sprintf("%x", h.Sum(nil))
+	return fmt.Sprintf("%x", h.Sum(nil)), nil
 }
 
 func byteCountSI(b uint64) string {

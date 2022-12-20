@@ -10,9 +10,10 @@ func main() {
 	var rootCmd = &cobra.Command{Use: "app"}
 
 	var (
-		searchIn     string
-		saveDumpTo   string
-		removePrefix string
+		searchIn       string
+		saveDumpTo     string
+		removePrefix   string
+		skipWithErrors bool
 	)
 
 	var cmdDump = &cobra.Command{
@@ -20,12 +21,13 @@ func main() {
 		Short: "Creates a dump",
 		Long:  `Creates a dump.`,
 		Run: func(cmd *cobra.Command, args []string) {
-			dump.DumpRun(searchIn, saveDumpTo, removePrefix)
+			dump.DumpRun(searchIn, saveDumpTo, removePrefix, skipWithErrors)
 		},
 	}
 	cmdDump.Flags().StringVarP(&searchIn, "searchIn", "s", "", "Location to dump")
 	cmdDump.Flags().StringVarP(&saveDumpTo, "saveDumpTo", "t", "", "Location to save the dump")
 	cmdDump.Flags().StringVarP(&removePrefix, "removePrefix", "p", "", "Remove prefix (if searchIn=../folder/, than you can pass removePrefix equals '../')")
+	cmdDump.Flags().BoolVarP(&skipWithErrors, "skipWithErrors", "e", false, "Skip files and folders, that couldn't be open")
 
 	var (
 		dump1 string
